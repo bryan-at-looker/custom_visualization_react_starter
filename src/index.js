@@ -1,25 +1,12 @@
-import Hello from './hello'
+import { App } from './App'
 import React from 'react'
 import ReactDOM from 'react-dom'
+import { getBounds, handleOverride } from './utils';
+import { options } from './options'
+import { ComponentsProvider } from '@looker/components'
 
 looker.plugins.visualizations.add({
-  // Id and Label are legacy properties that no longer have any function besides documenting
-  // what the visualization used to have. The properties are now set via the manifest
-  // form within the admin/visualizations page of Looker
-  id: "react_test",
-  label: "React Test",
-  options: {
-    font_size: {
-      type: "string",
-      label: "Font Size",
-      values: [
-        {"Large": "large"},
-        {"Small": "small"}
-      ],
-      display: "radio",
-      default: "large"
-    }
-  },
+  options,
   // Set up the initial state of the visualization
   create: function(element, config) {
 
@@ -34,12 +21,6 @@ looker.plugins.visualizations.add({
           justify-content: center;
           text-align: center;
         }
-        .hello-world-text-large {
-          font-size: 72px;
-        }
-        .hello-world-text-small {
-          font-size: 18px;
-        }
       </style>
     `;
 
@@ -52,37 +33,92 @@ looker.plugins.visualizations.add({
 
     // Render to the target element
     this.chart = ReactDOM.render(
-      <Hello data="loading..."/>,
+      <></>,
       this._textElement
     );
 
   },
   // Render in response to the data or settings changing
   updateAsync: function(data, element, config, queryResponse, details, done) {
-
     // Clear any errors from previous updates
     this.clearErrors();
 
     // Throw some errors and exit if the shape of the data isn't what this chart needs
-    if (queryResponse.fields.dimensions.length == 0) {
-      this.addError({title: "No Dimensions", message: "This chart requires dimensions."});
+    if (queryResponse.fields.measure_like.length < 2) {
+      this.addError({title: "Missing Measures", message: "This chart requires two measures."});
       return;
     }
 
-    // Set the size to the user-selected size
-    if (config.font_size == "small") {
-      this._textElement.className = "hello-world-text-small";
-    } else {
-      this._textElement.className = "hello-world-text-large";
+
+    if (queryResponse.fields.dimension_like.length < 1) {
+      this.addError({title: "Missing Dimensions", message: "This chart requires one dimension."});
+      return;
     }
 
-    // Grab the first cell of the data
-    let firstRow = data[0];
-    const firstCell = firstRow[queryResponse.fields.dimensions[0].name].value;
+    const {x_min, x_max, y_min, y_max, box_x_min, box_x_max, box_y_min, box_y_max, box_fill, point_fill, crosshair_fill, crosshair_stroke_width, point_size, margin } = config
+    const box_outline = [
+      {
+        x: handleOverride(box_x_min) || 0, 
+        y0: handleOverride(box_y_min) || 0,
+        y1: handleOverride(box_y_max) || 0
+      },{
+        x: handleOverride(box_x_max) || 0, 
+        y0: handleOverride(box_y_min) || 0,
+        y1: handleOverride(box_y_max) || 0
+      }
+    ]
+    const crosshair = {
+      x: config.crosshair_x,
+      y: config.crosshair_y
+    }
+    const label_config = {
+      label_fill: config.label_fill,
+      label_dx: config.label_dx,
+      label_dy: config.label_dy,
+      label_size: config.label_size
+    }
+    const names = {
+      measureX: queryResponse.fields.measure_like[0].name, 
+      measureY: queryResponse.fields.measure_like[1].name, 
+      labels: queryResponse.fields.dimension_like[0].name
+    }
+    const measureX = data.map(row=>row[names.measureX].value);
+    const measureY = data.map(row=>row[names.measureY].value);
+    const labels = data.map(row=>row[names.labels].value);
+    const field_labels = {
+      dimension: queryResponse.fields.dimension_like[0].label_short || queryResponse.fields.dimension_like[0].label,
+      measureX: queryResponse.fields.measure_like[0].label_short || queryResponse.fields.measure_like[0].label,
+      measureY: queryResponse.fields.measure_like[1].label_short || queryResponse.fields.measure_like[1].label,
+    }
+    const rendered = data.map(row=>{ 
+      return {
+        measureX: row[names.measureX].rendered || row[names.measureX].value || row[names.measureX].rendered,
+        measureY: row[names.measureY].rendered || row[names.measureY].value || row[names.measureY].rendered,
+        label: row[names.labels].rendered || row[names.labels].value || row[names.labels].rendered
+      } 
+    })
+
+    const box = [
+      [ 
+        getBounds(measureX, 'min', x_min),
+        getBounds(measureY, 'min', y_min),
+      ],
+      [
+        getBounds(measureX, 'max', x_max),
+        getBounds(measureY, 'max', y_max),
+      ]
+    ]
 
     // Finally update the state with our new data
     this.chart = ReactDOM.render(
-      <Hello data={firstCell}/>,
+      <ComponentsProvider>
+      <App 
+        // {...{data, element, config, queryResponse, details, done}}
+        {...{measureX, measureY, labels, box, rendered, names, box_outline, box_fill, point_fill, crosshair, crosshair_fill, crosshair_stroke_width, point_size, label_config, field_labels, margin}}
+        height={element.offsetHeight}
+        width={element.offsetWidth}
+      />
+      </ComponentsProvider>,
       this._textElement
     );
 
@@ -90,3 +126,4 @@ looker.plugins.visualizations.add({
     done()
   }
 });
+

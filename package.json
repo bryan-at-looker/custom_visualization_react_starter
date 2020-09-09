@@ -4,10 +4,13 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "start": "webpack-dev-server --hot --disable-host-check --https"
+    "start": "webpack-dev-server --hot --disable-host-check --https",
+    "build": "webpack"
   },
   "dependencies": {
-    "@looker/components": "^0.7.29",
+    "@looker/components": "^0.9.13",
+    "@nivo/scatterplot": "0.62.0",
+    "d3-shape": "1.2.2",
     "lodash": "^4.17.15",
     "react": "^16.13.1",
     "react-beautiful-dnd": "^13.0.0",
